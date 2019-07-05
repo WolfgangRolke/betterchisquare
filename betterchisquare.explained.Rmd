@@ -1,0 +1,120 @@
+---
+header-includes: \usepackage{color}
+                 \usepackage{float}
+output:
+  html_document: default
+  pdf_document:
+    fig_caption: no
+---
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+source("../R/setup.rmd.R", local=TRUE)
+setup.rmd(local.env=environment())
+```
+`r hl()$basefontsize()`
+`r hl()$style()`
+
+# Betterchisquare: An Online Goodness Of Fit Test
+
+The app can be run online at [https://drrolke.shinyapps.io/betterchisquare/](https://drrolke.shinyapps.io/betterchisquare/).
+
+The web site allows the user to carry out  the test in a variety of circumstances.
+
+The general setup and the features of the program are:
+
+there are observations (events) X<sub>1</sub> ,.., X<sub>n</sub> and we wish to test whether $X_i \sim F_0$ vs $X_i \sim F_1$, $F_0, F_1$ some probability distributions. 
+
+&bull; n may be fixed or come from a Poisson distribution rate &lambda;.
+
+&bull; data may be continuous or binned.
+
+## General Setup 
+
+### The Data
+
+The observations X<sub>1</sub> ,.., X<sub>n</sub> are either continuous observations or binned data such as one would draw in a histogram. In either case the data should be in an ASCII file that can be the uploaded to the web site. The formats are as follows:
+
+-  continuous data: file is a simple listing of the data, for example
+
+0.738 0.951 0.49 0.586 0.628 0.635 0.794 0.125 0.795 0.458  0.881 0.49 0.506 0.62 0.602 0.944 0.796 0.83 0.62 0.999  0.164 0.568 0.757 0.978 0.658 0.738 0.947 0.663 0.757 0.985 0.356 0.517 0.677 0.663 0.985 0.787 0.664 0.525 0.742 0.544  
+...  
+0.474 0.592 0.998 0.85 0.689 0.538 0.894 0.919 0.868 0.849 0.525 0.693 0.606 0.428 0.778 0.195 0.728 0.783 0.449 0.483 
+
+-  binned data: a file with two columns. In the first column it should have the endpoints of the bins and in the second column the bin counts, for example:
+
+0.00 23  
+0.01 25  
+0.02 31  
+...  
+0.99 10  
+1.00
+
+One current restriction of the program is that the data is assumed to be truncated to a finite interval. The endpoints have to be entered on the website.
+
+## Specifying the null and alternative
+
+The user needs to enter a function (aka density) for both the null and the alternative. This can be done in one of four ways:
+
+a.  enter an R expression via the keyboard  
+b.  enter a C++ expression via the keyboard
+c.  upload a file with R code  
+d.  upload a file with C++ code
+
+Warning: when C++ is used the app has to first compile the code. This can take up to 20 seconds. During compilation the app seems to not do anything, and any output (graphs and text) on the bottom of the page is somewhat grayed out.
+
+In general R expressions have to be syntacticaly correct in the sense that they could appear within an R function, except for the assignment part y <- ... The same is true for C++ code. 
+
+## Examples for specifying densities
+
+The variable name is always x, parameter name(s) are param, sample size is n. Densities need not be normalized.
+  
+- Uniform,  correct density $f(x)=1$
+
+R : 1
+
+C++ :
+
+for(int i=0;i<n;++i) y[i]=1.0;
+
+-  Linear,  correct density $f(x)=2x$
+
+R : x 
+
+C++ : for(int i=0;i<n;++i) y[i]=x[i];
+
+-  Exponential rate 1.7, correct density $f(x)=1.7*\exp(-1.7*x)$
+
+R : exp(-1.7*x) 
+
+C++ : for(int i=0;i<n;++i) y[i]=exp(-1.7*x[i]);
+
+
+If the null is composite and parameters are to be estimated use this:
+
+-  Null: normal
+
+R: dnorm(x, param[1], param[2])
+
+C++:
+
+for(int i=0;i<n;++i) y[i]=1/param[1]\*exp(-0.5*pow((x[i]-param[0])/param[1], 2));
+
+
+If the calculation of the densities requires several lines of code it is easier to save those as an ASCII file and upload them. Again the conventions are to use n, x and param as above. The first line has to read Null and the line before the alternative has to read Alternative.
+
+For example, we wish to test H~0~: F=Normal vs H~a~: F=t(5), then 
+
+R:
+
+Null  
+dnorm(x, param[1], param[2])  
+Alternative  
+dt(x, 5)
+
+C++:
+
+Null  
+for(int i=0;i<n;++i) y[i]=1/param[1]\*exp(-0.5*pow((x[i]-param[0])/param[1],2));  
+Alternative  
+for(int i=0;i<n;++i) y[i]=1/pow((1+pow(pow(x[i], 2), 0.2)), 3);
+

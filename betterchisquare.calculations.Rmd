@@ -1,0 +1,807 @@
+---
+header-includes: \usepackage{color}
+                 \usepackage{float}
+output:
+  html_document: default
+  pdf_document:
+    fig_caption: no
+---
+
+```{r, echo=FALSE}
+library(betterchisquare)
+#source("allroutines.R")
+library(knitr)
+opts_chunk$set(echo=FALSE, 
+               message=FALSE, 
+               warning=FALSE)
+```
+
+```{r}
+B <- 10000 # Number of simulation runs
+custom.col <- c("#4E84C4", "#C4961A",
+                "#D16103", "#FFDB6D",
+                "#52854C", "#293352")
+# Colors for graphs
+Methods <- c("Best Bin", "Equal Prob",
+    "Equal Size", "Histogram",  "KS", "AD")
+```
+
+
+## Why maximum likelihood estimation doesn't work 
+
+Consider the normal mixture model, specifically
+
+$X \sim \frac13 N(0, 1) +\frac23 N(5,2)$
+
+We will use both maximum likelihood estimation and minimum chisquare to estimate parameters and do the chisquare test. In all cases we use 10 equal probability bins. We repeat this B=10000 times and find the proportion of p values less than $5\%$.
+
+```{r}
+ndata <- 1000 # Size of data set
+nbins <- 10 # Number of bins
+set.seed(1113)
+```
+
+```{r make.funs}
+make.funs <- function() {
+  rnull <- function(n) {
+    Z <- sample(c(TRUE, FALSE), size=n, 
+        replace=TRUE, prob=c(1/3, 2/3))
+    rnorm(n, ifelse(Z, 0, 5),
+        ifelse(Z, 1, 2))
+  }
+  pnull <- function(x, p) {
+    p[1]*pnorm(x, p[2], p[3]) + 
+    (1-p[1])*pnorm(x, p[4], p[5])  
+  }
+
+  est.mle <- function(x) {
+    loglike <- function(p, x) {
+      -sum(log(p[1]*dnorm(x, p[2], p[3]) + 
+     (1-p[1])*dnorm(x, p[4], p[5])))
+    }
+    start <- c(1/3, 0, 1, 5, 2)
+    lower <- c(0, -1, 0.5, 2, 0.5)
+    upper <- c(1, 1, 3, 8, 6)
+    optim(start, loglike, lower=lower, 
+        upper=upper, x=x)$par
+  }
+  est.minchi <- function(O) {
+    chi <- function(par, O) {
+      E <-  ndata*diff(pnull(bins, par))
+      E[E<0.01] <- 0.01
+      sum((O-E)^2/E)
+    }
+    start <- c(1/3, 0, 1, 5, 2)
+    lower <- c(0, -1, 0.5, 2, 0.5)
+    upper <- c(1, 1, 3, 8, 6)
+    par <- optim(start, chi, lower=lower, 
+        upper=upper, O=O)$par
+  }
+  list(rnull=rnull, pnull=pnull, 
+      est.mle=est.mle,
+      est.minchi=est.minchi) 
+} 
+```
+
+
+```{r make.bins}
+z <- make.funs()$rnull(1e6)
+bins <- quantile(z, seq(0, 1, length=nbins+1))
+bins[c(1, nbins+1)] <- c(-Inf, Inf)
+assign("bins", bins)
+```
+
+
+```{r mle.chisq}
+mle.chisq <-  function() {
+  funs <- make.funs()  
+  pvals <- matrix(0, B, 2)
+  for(i in 1:B) {
+    x <- funs$rnull(ndata)
+    mle <- funs$est.mle(x)
+    E <- ndata*diff(funs$pnull(bins, mle))
+    df <- length(E)-1-5
+    O <- hist(x, breaks=bins, 
+              plot = FALSE)$counts
+    pvals[i, 1] <- 
+       1-pchisq(sum((O-E)^2/E), df)
+    minchi <- funs$est.minchi(O)
+    E <- ndata*diff(funs$pnull(bins, minchi))
+    pvals[i, 2] <- 
+      1-pchisq(sum((O-E)^2/E), df)
+  }
+  out <- c(sum(pvals[, 1]<0.05), 
+    sum(pvals[, 2]<0.05))/B
+  names(out) <- c("MLE", "MinChi")
+  out
+}
+```
+
+```{r cache=TRUE}
+mle.chisq()
+```
+
+## Number of bins
+
+```{r fig1, cache=TRUE}
+case <- list(
+  param = NULL,
+  B = B,
+  alpha = 0.05,
+  n = 1000, # sample size
+  dnull = function(x, param) dunif(x),  
+  pnull = function(x, param) punif(x),
+  qnull = function(x, param) qunif(x),
+  rnull = function(n) runif(n),
+  palt = function(x) plinear(x, 0.2),
+  ralt = function(n) rlinear(n, 0.2),
+  LR = c(0, 1)
+)
+case <- make.case(case)
+k <- 2:21
+n <- c(100, 250, 500, 1000, 2000)
+out <- matrix(0, 5, 20)
+dimnames(out) <- list(n, k)
+for(j in seq_along(n)) {
+  case$n <- n[j]
+  for(i in seq_along(k))
+    out[j, i] <- round(standard.chisq.power(case, k[i])$power[1]*100, 1)
+}  
+df <- data.frame(
+  n=factor(rep(n, 20)),
+  k=rep(k, each=5),
+  Power=c(out))
+```
+
+```{r}
+plt1 <- ggplot(data=df, 
+               aes(k, Power, color=n)) +
+  geom_point() +
+  labs(color='Sample Size')+
+  xlab('Number of Bins')
+print(plt1)
+ggsave("paper/fig1.pdf")
+ggsave("paper/fig1.png")
+```
+
+## Type of bins
+
+```{r}
+x <- seq(0, 1, length=250)
+y1 <- dlinear(x, -0.5)
+y2 <- dtexp(x, 1)
+df <- data.frame(
+  x=c(x,x),
+  y=c(y1, y2),
+  Model=rep(c("Linear", "Exponential"),
+            each=250))
+``` 
+
+
+```{r fig2, cache=TRUE}
+case <- list(
+  param = NULL,
+  B = B,
+  alpha = 0.05,
+  n = 10000, # sample size
+  dnull = function(x, param) 
+    dlinear(x, -0.5),  
+  pnull = function(x, param) 
+    plinear(x, -0.5),
+  rnull = function(n) rlinear(n, -0.5),
+  palt = function(x) ptexp(x, 1),
+  ralt = function(n) rtexp(n, 1),
+  LR = c(0, 1)
+)
+case <- make.case(case)
+kappas <- seq(0, 1, length=5)
+M <- matrix(0, 5, 20)
+dimnames(M) <- list(kappas, 2:21)
+P <- M
+for(k in  1:20) {
+  for(i in seq_along(kappas)) {
+    M[i, k] <- minchi.alt(case=case,  
+          k=k+1, kappa=kappas[i])$value
+    P[i, k] <- standard.chisq.power(
+      case=case,  k=k+1,
+      kappa=kappas[i])$power
+  }  
+}
+round(M, 2)
+round(100*P, 1)
+df <- data.frame(
+  n=rep(2:21, 5),
+  M=c(t(M)),
+  Power=c(t(P)),
+  kappa=factor(rep(kappas, each=20))
+)
+```
+
+```{r}
+plt2a <- ggplot(data=df, aes(n, M, color=kappa)) +
+  geom_point() +
+  theme(legend.position = "none")
+ggsave("paper/fig2a.pdf")
+plt2b <- ggplot(data=df, 
+                aes(n, Power, color=kappa)) +
+  geom_point() 
+ggsave("paper/fig2b.pdf")
+```
+
+```{r}
+pushViewport(viewport(layout = grid.layout(1, 2)))
+print(plt2a, 
+  vp=viewport(layout.pos.row=1, layout.pos.col=1))
+print(plt2b, 
+  vp=viewport(layout.pos.row=1, layout.pos.col=2))
+pdf()
+grid.newpage()
+pushViewport(viewport(layout = grid.layout(1, 2)))
+print(plt2a, 
+  vp=viewport(layout.pos.row=1, layout.pos.col=1))
+print(plt2b, 
+  vp=viewport(layout.pos.row=1, layout.pos.col=2))
+dev.off()
+```
+
+## Normal(0,1) vs t(df)
+
+```{r}
+case <- list(
+  param = NULL,
+  B = B,
+  n = 1000, # sample size
+  dnull = function(x, param) dnorm(x),  
+  pnull = function(x, param) pnorm(x),
+  rnull = function(n) rnorm(n),
+  palt = function(x) pt(x, 1),
+  ralt = function(n) rt(n, 1),
+  LR = c(-10, 10)
+)
+case <- make.case(case)
+```
+
+-  Power vs. various alternatives:
+
+```{r fig3, cache=TRUE}
+out <- matrix(0, 20, 6)
+rownames(out) <- paste("df =", 3*1:20)
+colnames(out) <- Methods
+for(i in 1:20) {
+  case$palt = function(x) pt(x, 3*i)
+  case$ralt = function(n) rt(n, 3*i)
+  out[i, ] <- tests.power(case)  
+} 
+out <- round(out*100, 1)
+```
+
+```{r}
+df <- data.frame(
+  x=rep(3*1:20, 6),
+  Power=c(out),
+  Method=factor(rep(colnames(out), each=20),
+        levels=Methods,
+        ordered=TRUE
+  )
+)
+```
+
+```{r}
+df1 <- df[df$Method=="Best Bin", ]
+ggplot(data=df, 
+       aes(x, Power , color=Method)) +
+  geom_point() +
+  xlab("Degree of Freedom") +
+  geom_line(data=df1, aes(x, Power)) +
+  scale_color_manual(values = custom.col)
+ggsave("paper/fig3.pdf")
+out
+```
+
+-  Does $M_{k,\kappa}$ yield best power?
+
+```{r error=TRUE}
+case$palt <- function(x) pt(x, 15)
+case <- make.case(case)
+best <- opt.chisq.power(case)
+Ks <- best$nbins + (-2):2
+Ks <- Ks[Ks>1+length(case$param)]
+kappa <- 0:4/4
+out <- matrix(0, length(Ks), 5)
+colnames(out) <- kappa
+rownames(out) <- Ks
+for(i in seq_along(Ks)) 
+  out[i, ] <- standard.chisq.power(case, 
+          k=Ks[i],  kappa=0:4/4)$power
+unlist(best)
+round(out*100, 1)
+```
+
+Yes!
+
+-  Dependence on Sample Size
+
+```{r fig3a, cache=TRUE}
+n <- c(100, 250, 500, 1000, 2000)
+out <- matrix(0, 2, 5)
+dimnames(out) <- list(c("nbins", "kappa"), n)
+for(i in c(1, 10, 20)) {
+  cat("df= ", 3*i, "\n")
+  case$palt = function(x) pt(x, 3*i)
+  case$ralt = function(n) rt(n, 3*i)
+  for(j in seq_along(n)) {
+    case$n <- n[j]
+    out[, j] <- unlist(opt.chisq.power(case))[1:2]
+  }
+  print(out)
+}
+```
+
+
+## Normal vs t(df)
+
+```{r}
+case <- list(
+  param = c(0, 1),
+  B = B,
+  n = 1000, # sample size
+  dnull = function(x, param) 
+    dnorm(x, param[1], param[2]),  
+  pnull = function(x, param) 
+    pnorm(x, param[1], param[2]),  
+  rnull = function(n) rnorm(n),
+  palt = function(x) pt(x, 1),
+  ralt = function(n) rt(n, 1),
+  LR = c(-Inf, Inf)
+)
+case <- make.case(case)
+mle.fun <- function(x) c(mean(x), sd(x))
+```
+
+-  Power vs. various alternatives:
+
+```{r fig4, cache=TRUE}
+out <- matrix(0, 20, 6)
+rownames(out) <- paste("df =", 3*1:20)
+colnames(out) <- Methods
+for(i in 1:20) {
+  case$palt = function(x) pt(x, 3*i)
+  case$ralt = function(n) rt(n, 3*i)
+  out[i, ] <- 
+    tests.power(case, est.mle=mle.fun)  
+} 
+out <- round(out*100, 1)
+```
+
+```{r}
+df <- data.frame(
+  x=rep(3*1:20, 6),
+  Power=c(out),
+  Method=factor(rep(colnames(out), each=20),
+        levels=Methods,
+        ordered=TRUE
+  )
+)
+df1 <- df[df$Method=="Best Bin", ]
+ggplot(data=df, 
+       aes(x, Power , color=Method)) +
+  geom_point() +
+  xlab("Degree of Freedom") +
+  geom_line(data=df1, aes(x, Power)) +
+  scale_color_manual(values = custom.col)
+ggsave("paper/fig4.pdf")
+out
+```
+
+-  Does $M_{k,\kappa}$ yield best power?
+
+```{r error=TRUE}
+case$palt <- function(x) pt(x, 9)
+case <- make.case(case)
+best <- opt.chisq.power(case)
+Ks <- best$nbins + (-2):2
+Ks <- Ks[Ks>1+length(case$param)]
+kappa <- 0:4/4
+out <- matrix(0, length(Ks), 5)
+colnames(out) <- kappa
+rownames(out) <- Ks
+for(i in seq_along(Ks)) 
+     out[i, ] <- standard.chisq.power(case, 
+          k=Ks[i],  kappa=kappa)$power
+unlist(best)
+round(out*100, 1)
+
+```
+
+Yes!
+
+-  Dependence on Sample Size
+
+```{r fig4a, cache=TRUE}
+n <- c(100, 250, 500, 1000, 2000)
+out <- matrix(0, 2, 5)
+dimnames(out) <- list(c("nbins", "kappa"), n)
+for(i in c(1, 10, 20)) {
+  cat("df= ", 3*i, "\n")
+  case$palt = function(x) pt(x, 3*i)
+  case$ralt = function(n) rt(n, 3*i)
+  for(j in seq_along(n)) {
+    case$n <- n[j]
+    out[, j] <- unlist(opt.chisq.power(case))[1:2]
+  }
+  print(out)
+}
+```
+
+
+### Flat (Uniform) vs Linear
+
+Here we have $H_0: F=U[0,1]$ vs $H_a: F=\text{Linear}(s)$.
+
+```{r}
+case <- list(
+  param = NULL,
+  B = B,
+  n = 1000, # sample size
+  dnull = function(x, param) 
+    dunif(x),  
+  pnull = function(x, param) 
+    punif(x),  
+  rnull = function(n) runif(n),
+  palt = function(x) plinear(x, 0.1),
+  ralt = function(n) rlinear(n, 0.1),
+  LR = c(0, 1)
+)
+case <- make.case(case)
+mle.fun <- function(x) c(mean(x), sd(x))
+```
+
+-  Power vs. various alternatives:
+
+```{r fig5, cache=TRUE}
+slope <- round(seq(0, 0.3, length=20), 2)
+out <- matrix(0, 20, 6)
+rownames(out) <- paste("slope =", slope)
+colnames(out) <- Methods
+for(i in 1:20) {
+  case$palt = function(x) 
+    plinear(x, slope[i])
+  case$ralt = function(n) 
+    rlinear(n, slope[i])
+  out[i, ] <- 
+    tests.power(case)  
+} 
+out <- round(out*100, 1)
+```
+
+```{r}
+df <- data.frame(
+  x=rep(slope, 6),
+  Power=c(out),
+  Method=factor(rep(colnames(out), each=20),
+        levels=Methods,
+        ordered=TRUE
+  )
+)
+df1 <- df[df$Method=="Best Bin", ]
+ggplot(data=df, 
+       aes(x, Power , color=Method)) +
+  geom_point() +
+  xlab("Slope") +
+  geom_line(data=df1, aes(x, Power)) +
+  scale_color_manual(values = custom.col)
+ggsave("paper/fig5.pdf")
+out
+```
+
+-  Does $M_{k,\kappa}$ yield best power?
+
+```{r error=TRUE}
+case$palt = function(x) plinear(x, 0.14)
+case$ralt = function(n) rlinear(n, 0.14)
+case <- make.case(case)
+best <- opt.chisq.power(case)
+Ks <- best$nbins + (-2):2
+Ks <- Ks[Ks>1+length(case$param)]
+kappa <- 0:4/4
+out <- matrix(0, length(Ks), 5)
+colnames(out) <- kappa
+rownames(out) <- Ks
+for(i in seq_along(Ks)) 
+     out[i, ] <- standard.chisq.power(case, 
+          k=Ks[i],  kappa=kappa)$power
+unlist(best)
+round(out*100, 1)
+
+```
+
+Yes (within simulation error)!
+
+
+-  Dependence on Sample Size
+
+```{r fig5a, cache=TRUE}
+n <- c(100, 250, 500, 1000, 2000)
+out <- matrix(0, 2, 5)
+dimnames(out) <- list(c("nbins", "kappa"), n)
+for(i in c(1, 10, 20)) {
+  cat("slope= ", slope[i],"\n")
+  case$palt <- function(x) plinear(x, slope[i])
+  case$ralt <- function(n) rlinear(n, slope[i])
+  for(j in seq_along(n)) {
+    case$n <- n[j]
+    out[, j] <- unlist(opt.chisq.power(case))[1:2]
+  }
+  print(out)
+}  
+```
+
+### Exponential  vs Exponential(1)+Normal(1.5, sigma)
+
+
+```{r}
+case <- list(
+  param = 1,
+  B = B,
+  n = 1000, # sample size
+  dnull = function(x, param) 
+    dexp(x, param),  
+  pnull = function(x, param) 
+    pexp(x, param),  
+  rnull = function(n) rexp(n, 1),
+  LR = c(0, Inf)
+)
+case <- make.case(case)
+mle.fun <- function(x) 1/mean(x)
+```
+
+-  Power vs. various alternatives:
+
+```{r fig6, cache=TRUE}
+out <- matrix(0, 20, 6)
+sigma <- round(seq(1, 0.3, length=20), 2)
+rownames(out) <- sigma
+colnames(out) <- Methods
+for(i in 1:20) {
+  case$palt = function(x) 
+    (0.9*pexp(x, 1) + 
+     0.1*pnorm(x, 1.5, sigma[i]))
+  case$ralt = function(n) {
+    z <- sample(0:1, case$n, 
+                replace = TRUE, prob=c(9,1))
+    y <- rnorm(case$n, 1.5, sigma[i])
+    y <- y[y>0]
+    ifelse(z==0, rexp(case$n, 1), y)
+  }
+  out[i, ] <- 
+    tests.power(case, est.mle=mle.fun)  
+} 
+out <- round(out*100, 1)
+```
+
+```{r}
+df <- data.frame(
+  x=rep(sigma, 6),
+  Power=c(out),
+  Method=factor(rep(colnames(out), each=20),
+        levels=Methods,
+        ordered=TRUE
+  )
+)
+df1 <- df[df$Method=="Best Bin", ]
+ggplot(data=df, 
+       aes(x, Power , color=Method)) +
+  geom_line() +
+  xlab(expression(sigma)) +
+  geom_point(data=df1, aes(x, Power)) +
+  scale_color_manual(values = custom.col)
+ggsave("paper/fig6.pdf")
+out
+```
+
+
+-  Does $M_{k,\kappa}$ yield best power?
+
+```{r error=TRUE}
+case$palt <- function(x) 
+    (0.9*pexp(x, 1) + 0.1*pnorm(x, 1.5, 0.74))
+case$ralt <- function(n) {
+    z <- sample(0:1, case$n, 
+                replace = TRUE, prob=c(9,1))
+    y <- rnorm(case$n, 1.5, 0.74)
+    y <- y[y>0]
+    ifelse(z==0, rnorm(case$n, 1), y)
+  }
+case <- make.case(case)
+best <- opt.chisq.power(case)
+Ks <- best$nbins + (-2):2
+Ks <- Ks[Ks>1+length(case$param)]
+kappa <- 0:4/4
+out <- matrix(0, length(Ks), 5)
+colnames(out) <- kappa
+rownames(out) <- Ks
+for(i in seq_along(Ks)) 
+     out[i, ] <- standard.chisq.power(case, 
+          k=Ks[i],  kappa=kappa)$power
+unlist(best)
+round(out*100, 1)
+
+```
+
+Yes (within simulation error)!
+
+
+-  Dependence on Sample Size
+
+```{r fig6a, cache=TRUE}
+n <- c(100, 250, 500, 1000, 2000)
+out <- matrix(0, 2, 5)
+dimnames(out) <- list(c("nbins", "kappa"), n)
+for(i in c(1, 10, 20)) {
+  cat("sigma= ", sigma[i],"\n")
+  case$palt = function(x) 
+    (0.9*pexp(x, 1) + 
+     0.1*pnorm(x, 1.5, sigma[1]))
+  case$ralt = function(n) {
+    z <- sample(0:1, case$n, 
+                replace = TRUE, prob=c(9,1))
+    y <- rnorm(case$n, 1.5, sigma[1])
+    y <- y[y>0]
+    ifelse(z==0, rexp(case$n, 1), y)
+  }
+  for(j in seq_along(n)) {
+    case$n <- n[j]
+    out[, j] <- unlist(opt.chisq.power(case))[1:2]
+  }
+  print(out)
+}
+```
+
+### Linear vs Linear + sin curves
+
+```{r}
+case <- list(
+  param = NULL,
+  B = B,
+  n = 500, # sample size
+  pnull = function(x, param) 2/3*(x+x^2/2),
+  LR = c(0, 1)
+)
+```
+
+-  Power vs. various alternatives:
+
+```{r fig7, cache=TRUE}
+lambda <- round(seq(0.05, 0.5, length=20), 2)
+out <- matrix(0, 20, 6)
+rownames(out) <- paste("lambda =", lambda)
+colnames(out) <- Methods
+for(i in 1:20) {
+  case$palt <- function(x) 
+     2/3*(x+x^2/2) -
+    lambda[i]*cos(5.5*pi*x)/5.5/pi 
+  case$ralt <- NULL
+  case <- make.case(case)
+  out[i, ] <- tests.power(case)  
+} 
+out <- round(out*100, 1)
+```
+
+```{r}
+df <- data.frame(
+  x=rep(lambda, 6),
+  Power=c(out),
+  Method=factor(rep(colnames(out), each=20),
+        levels=Methods,
+        ordered=TRUE
+  )
+)
+df1 <- df[df$Method=="Best Bin", ]
+ggplot(data=df, 
+       aes(x, Power , color=Method)) +
+  geom_line() +
+  xlab(expression(lambda)) +
+  geom_point(data=df1, aes(x, Power)) +
+  scale_color_manual(values = custom.col)
+ggsave("paper/fig7.pdf")
+out
+```
+
+-  Does $M_{k,\kappa}$ yield best power?
+
+```{r error=TRUE}
+case$palt <- function(x)
+  2/3*(x+x^2)-0.24*cos(5.5*pi*x)/5.5/pi 
+case$ralt <- NULL
+case <- make.case(case)
+best <- opt.chisq.power(case)
+Ks <- best$nbins + (-2):2
+Ks <- Ks[Ks>1+length(case$param)]
+kappa <- 0:4/4
+out <- matrix(0, length(Ks), 5)
+colnames(out) <- kappa
+rownames(out) <- Ks
+for(i in seq_along(Ks)) 
+     out[i, ] <- standard.chisq.power(case, 
+          k=Ks[i],  kappa=kappa)$power
+unlist(best)
+round(out*100, 1)
+
+```
+
+Yes (within simulation error)!
+
+-  Dependence on Sample Size
+
+```{r fig7a, cache=TRUE}
+n <- c(100, 250, 500, 1000, 2000)
+out <- matrix(0, 2, 5)
+dimnames(out) <- list(c("nbins", "kappa"), n)
+for(i in c(1, 10, 20)) {
+  cat("lambda= ", lambda[i],"\n")
+  case$palt <- function(x)
+  2/3*(x+x^2)-lambda[i]*cos(5.5*pi*x)/5.5/pi 
+  case$ralt <- NULL
+  case <- make.case(case)
+  for(j in seq_along(n)) {
+    case$n <- n[j]
+    out[, j] <-
+      unlist(opt.chisq.power(case))[1:2]
+  }
+  print(out)
+}
+```
+
+### Uniform vs several alternatives
+
+```{r}
+case <- list(
+  param = NULL,
+  B = B,
+  n = 1000, # sample size
+  dnull = function(x, param) dunif(x),
+  pnull = function(x, param) punif(x),
+  rnull = function(n) runif(x),
+  qnull = function(x) qunif(x),
+  LR = c(0, 1)
+)
+```
+
+```{r}
+Models <- c("Linear", "Quadratic 1", 
+    "Quadratic 2", "Quadratic 3", 
+    "Exponential", "Beta")
+altmodel <- function(case, which) {
+  if(which=="Linear")
+     case$palt <- function(x) plinear(x, 0.18)
+  if(which=="Quadratic 1")  
+     case$dalt.txt <- "1+1.95*(x-0.5)^2"
+  if(which=="Quadratic 2")    
+     case$dalt.txt <- "1+0.4*x^2"
+  if(which=="Quadratic 3")    
+     case$dalt.txt <- "1+0.2*(x+1)^2"
+  if(which=="Exponential")  
+     case$dalt.txt <- "exp(-0.37*x)"  
+  if(which=="Beta")    
+     case$palt <- function(x) pbeta(x, 1.035, 0.91)
+ case <- make.case(case)  
+ case
+}
+
+```
+
+-  Power vs. various alternatives:
+
+```{r cache=TRUE}
+out <- matrix(0, length(Models), 3)
+rownames(out) <- Models
+for(i in seq_along(Models)) {
+  case1 <- altmodel(case, Models[i])
+  out[i, ] <- unlist(opt.chisq.power(case1))  
+} 
+x=3
+```
+
+```{r}
+out
+```
