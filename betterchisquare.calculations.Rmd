@@ -22,8 +22,9 @@ custom.col <- c("#4E84C4", "#C4961A",
                 "#D16103", "#FFDB6D",
                 "#52854C", "#293352")
 # Colors for graphs
-Methods <- c("Best Bin", "Equal Prob",
+Methods <- c("Better chi2", "Equal Prob",
     "Equal Size", "Histogram",  "KS", "AD")
+bttr <- expression(Better ~ chi^2)
 ```
 
 
@@ -276,6 +277,7 @@ out <- round(out*100, 1)
 ```
 
 ```{r}
+colnames(out) <- Methods
 df <- data.frame(
   x=rep(3*1:20, 6),
   Power=c(out),
@@ -287,13 +289,15 @@ df <- data.frame(
 ```
 
 ```{r}
-df1 <- df[df$Method=="Best Bin", ]
+df1 <- df[df$Method=="Better chi2", ]
 ggplot(data=df, 
        aes(x, Power , color=Method)) +
   geom_point() +
   xlab("Degree of Freedom") +
   geom_line(data=df1, aes(x, Power)) +
-  scale_color_manual(values = custom.col)
+  scale_color_manual(values = custom.col) +
+  scale_color_discrete(
+    labels = c(bttr, Methods[-1]))
 ggsave("paper/fig3.pdf")
 out
 ```
@@ -312,7 +316,8 @@ colnames(out) <- kappa
 rownames(out) <- Ks
 for(i in seq_along(Ks)) 
   out[i, ] <- standard.chisq.power(case, 
-          k=Ks[i],  kappa=0:4/4)$power
+          k=Ks[i],  kappa=0:4/4,
+          method=best$method)$power
 unlist(best)
 round(out*100, 1)
 ```
@@ -331,7 +336,7 @@ for(i in c(1, 10, 20)) {
   case$ralt = function(n) rt(n, 3*i)
   for(j in seq_along(n)) {
     case$n <- n[j]
-    out[, j] <- unlist(opt.chisq.power(case))[1:2]
+    out[, j] <- as.numeric(unlist(opt.chisq.power(case))[1:2])
   }
   print(out)
 }
@@ -374,6 +379,7 @@ out <- round(out*100, 1)
 ```
 
 ```{r}
+colnames(out) <- Methods
 df <- data.frame(
   x=rep(3*1:20, 6),
   Power=c(out),
@@ -382,13 +388,15 @@ df <- data.frame(
         ordered=TRUE
   )
 )
-df1 <- df[df$Method=="Best Bin", ]
+df1 <- df[df$Method=="Better chi2", ]
 ggplot(data=df, 
        aes(x, Power , color=Method)) +
   geom_point() +
   xlab("Degree of Freedom") +
   geom_line(data=df1, aes(x, Power)) +
-  scale_color_manual(values = custom.col)
+  scale_color_manual(values = custom.col) +
+  scale_color_discrete(
+    labels = c(bttr, Methods[-1]))
 ggsave("paper/fig4.pdf")
 out
 ```
@@ -407,7 +415,8 @@ colnames(out) <- kappa
 rownames(out) <- Ks
 for(i in seq_along(Ks)) 
      out[i, ] <- standard.chisq.power(case, 
-          k=Ks[i],  kappa=kappa)$power
+          k=Ks[i],  kappa=kappa,
+          method=best$method)$power
 unlist(best)
 round(out*100, 1)
 
@@ -427,7 +436,7 @@ for(i in c(1, 10, 20)) {
   case$ralt = function(n) rt(n, 3*i)
   for(j in seq_along(n)) {
     case$n <- n[j]
-    out[, j] <- unlist(opt.chisq.power(case))[1:2]
+    out[, j] <- as.numeric(unlist(opt.chisq.power(case))[1:2])
   }
   print(out)
 }
@@ -475,6 +484,7 @@ out <- round(out*100, 1)
 ```
 
 ```{r}
+colnames(out) <- Methods
 df <- data.frame(
   x=rep(slope, 6),
   Power=c(out),
@@ -483,13 +493,15 @@ df <- data.frame(
         ordered=TRUE
   )
 )
-df1 <- df[df$Method=="Best Bin", ]
+df1 <- df[df$Method=="Better chi2", ]
 ggplot(data=df, 
        aes(x, Power , color=Method)) +
   geom_point() +
   xlab("Slope") +
   geom_line(data=df1, aes(x, Power)) +
-  scale_color_manual(values = custom.col)
+  scale_color_manual(values = custom.col) +
+  scale_color_discrete(
+    labels = c(bttr, Methods[-1]))
 ggsave("paper/fig5.pdf")
 out
 ```
@@ -509,7 +521,8 @@ colnames(out) <- kappa
 rownames(out) <- Ks
 for(i in seq_along(Ks)) 
      out[i, ] <- standard.chisq.power(case, 
-          k=Ks[i],  kappa=kappa)$power
+          k=Ks[i],  kappa=kappa,
+          method=best$method)$power
 unlist(best)
 round(out*100, 1)
 
@@ -530,7 +543,7 @@ for(i in c(1, 10, 20)) {
   case$ralt <- function(n) rlinear(n, slope[i])
   for(j in seq_along(n)) {
     case$n <- n[j]
-    out[, j] <- unlist(opt.chisq.power(case))[1:2]
+    out[, j] <- as.numeric(unlist(opt.chisq.power(case))[1:2])
   }
   print(out)
 }  
@@ -580,6 +593,7 @@ out <- round(out*100, 1)
 ```
 
 ```{r}
+colnames(out) <- Methods
 df <- data.frame(
   x=rep(sigma, 6),
   Power=c(out),
@@ -588,13 +602,15 @@ df <- data.frame(
         ordered=TRUE
   )
 )
-df1 <- df[df$Method=="Best Bin", ]
+df1 <- df[df$Method=="Better chi2", ]
 ggplot(data=df, 
        aes(x, Power , color=Method)) +
   geom_line() +
   xlab(expression(sigma)) +
   geom_point(data=df1, aes(x, Power)) +
-  scale_color_manual(values = custom.col)
+  scale_color_manual(values = custom.col) +
+  scale_color_discrete(
+    labels = c(bttr, Methods[-1]))
 ggsave("paper/fig6.pdf")
 out
 ```
@@ -622,7 +638,8 @@ colnames(out) <- kappa
 rownames(out) <- Ks
 for(i in seq_along(Ks)) 
      out[i, ] <- standard.chisq.power(case, 
-          k=Ks[i],  kappa=kappa)$power
+          k=Ks[i],  kappa=kappa,
+          method=best$method)$power
 unlist(best)
 round(out*100, 1)
 
@@ -651,112 +668,19 @@ for(i in c(1, 10, 20)) {
   }
   for(j in seq_along(n)) {
     case$n <- n[j]
-    out[, j] <- unlist(opt.chisq.power(case))[1:2]
+    out[, j] <- as.numeric(unlist(opt.chisq.power(case))[1:2])
   }
   print(out)
 }
 ```
 
-### Linear vs Linear + sin curves
-
-```{r}
-case <- list(
-  param = NULL,
-  B = B,
-  n = 500, # sample size
-  pnull = function(x, param) 2/3*(x+x^2/2),
-  LR = c(0, 1)
-)
-```
-
--  Power vs. various alternatives:
-
-```{r fig7, cache=TRUE}
-lambda <- round(seq(0.05, 0.5, length=20), 2)
-out <- matrix(0, 20, 6)
-rownames(out) <- paste("lambda =", lambda)
-colnames(out) <- Methods
-for(i in 1:20) {
-  case$palt <- function(x) 
-     2/3*(x+x^2/2) -
-    lambda[i]*cos(5.5*pi*x)/5.5/pi 
-  case$ralt <- NULL
-  case <- make.case(case)
-  out[i, ] <- tests.power(case)  
-} 
-out <- round(out*100, 1)
-```
-
-```{r}
-df <- data.frame(
-  x=rep(lambda, 6),
-  Power=c(out),
-  Method=factor(rep(colnames(out), each=20),
-        levels=Methods,
-        ordered=TRUE
-  )
-)
-df1 <- df[df$Method=="Best Bin", ]
-ggplot(data=df, 
-       aes(x, Power , color=Method)) +
-  geom_line() +
-  xlab(expression(lambda)) +
-  geom_point(data=df1, aes(x, Power)) +
-  scale_color_manual(values = custom.col)
-ggsave("paper/fig7.pdf")
-out
-```
-
--  Does $M_{k,\kappa}$ yield best power?
-
-```{r error=TRUE}
-case$palt <- function(x)
-  2/3*(x+x^2)-0.24*cos(5.5*pi*x)/5.5/pi 
-case$ralt <- NULL
-case <- make.case(case)
-best <- opt.chisq.power(case)
-Ks <- best$nbins + (-2):2
-Ks <- Ks[Ks>1+length(case$param)]
-kappa <- 0:4/4
-out <- matrix(0, length(Ks), 5)
-colnames(out) <- kappa
-rownames(out) <- Ks
-for(i in seq_along(Ks)) 
-     out[i, ] <- standard.chisq.power(case, 
-          k=Ks[i],  kappa=kappa)$power
-unlist(best)
-round(out*100, 1)
-
-```
-
-Yes (within simulation error)!
-
--  Dependence on Sample Size
-
-```{r fig7a, cache=TRUE}
-n <- c(100, 250, 500, 1000, 2000)
-out <- matrix(0, 2, 5)
-dimnames(out) <- list(c("nbins", "kappa"), n)
-for(i in c(1, 10, 20)) {
-  cat("lambda= ", lambda[i],"\n")
-  case$palt <- function(x)
-  2/3*(x+x^2)-lambda[i]*cos(5.5*pi*x)/5.5/pi 
-  case$ralt <- NULL
-  case <- make.case(case)
-  for(j in seq_along(n)) {
-    case$n <- n[j]
-    out[, j] <-
-      unlist(opt.chisq.power(case))[1:2]
-  }
-  print(out)
-}
-```
 
 ### Uniform vs several alternatives
 
 ```{r}
 case <- list(
   param = NULL,
+  
   B = B,
   n = 1000, # sample size
   dnull = function(x, param) dunif(x),
@@ -793,13 +717,12 @@ altmodel <- function(case, which) {
 -  Power vs. various alternatives:
 
 ```{r cache=TRUE}
-out <- matrix(0, length(Models), 3)
+out <- matrix(0, length(Models), 4)
 rownames(out) <- Models
 for(i in seq_along(Models)) {
   case1 <- altmodel(case, Models[i])
   out[i, ] <- unlist(opt.chisq.power(case1))  
 } 
-x=3
 ```
 
 ```{r}
