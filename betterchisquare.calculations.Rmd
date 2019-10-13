@@ -22,6 +22,7 @@ custom.col <- c("#4E84C4", "#C4961A",
                 "#D16103", "#FFDB6D",
                 "#52854C", "#293352")
 # Colors for graphs
+custom.shape <- c(19, 15:18, 20)
 Methods <- c("Better chi2", "Equal Prob",
     "Equal Size", "Histogram",  "KS", "AD")
 bttr <- expression(Better ~ chi^2)
@@ -156,13 +157,13 @@ df <- data.frame(
 
 ```{r}
 plt1 <- ggplot(data=df, 
-               aes(k, Power, color=n)) +
+               aes(k, Power, shape=n)) +
   geom_point() +
   labs(color='Sample Size')+
   xlab('Number of Bins')
 print(plt1)
-ggsave("paper/fig1.pdf")
-ggsave("paper/fig1.png")
+ggsave(
+  paste0(getwd(), "/Computational Statistics/Fig1.pdf"))
 ```
 
 ## Type of bins
@@ -219,14 +220,16 @@ df <- data.frame(
 ```
 
 ```{r}
-plt2a <- ggplot(data=df, aes(n, M, color=kappa)) +
+plt2a <- ggplot(data=df, aes(n, M, shape=kappa)) +
   geom_point() +
   theme(legend.position = "none")
-ggsave("paper/fig2a.pdf")
+ggsave(
+  paste0(getwd(), "/Computational Statistics/Fig2a.pdf"))
 plt2b <- ggplot(data=df, 
-                aes(n, Power, color=kappa)) +
+                aes(n, Power, shape=kappa)) +
   geom_point() 
-ggsave("paper/fig2b.pdf")
+ggsave(
+  paste0(getwd(), "/Computational Statistics/Fig2b.pdf"))
 ```
 
 ```{r}
@@ -288,18 +291,19 @@ df <- data.frame(
 )
 ```
 
-```{r}
+```{r error=TRUE}
 df1 <- df[df$Method=="Better chi2", ]
 ggplot(data=df, 
-       aes(x, Power , color=Method)) +
+       aes(x, Power , shape=Method)) +
   geom_point() +
   xlab("Degree of Freedom") +
   geom_line(data=df1, aes(x, Power)) +
-  scale_color_manual(values = custom.col) +
-  scale_color_discrete(
+  scale_shape_discrete(
     labels = c(bttr, Methods[-1]))
-ggsave("paper/fig3.pdf")
+ggsave(paste0(getwd(), 
+              "/Computational Statistics/Fig3.pdf"))
 out
+
 ```
 
 -  Does $M_{k,\kappa}$ yield best power?
@@ -390,14 +394,14 @@ df <- data.frame(
 )
 df1 <- df[df$Method=="Better chi2", ]
 ggplot(data=df, 
-       aes(x, Power , color=Method)) +
+       aes(x, Power , shape=Method)) +
   geom_point() +
   xlab("Degree of Freedom") +
   geom_line(data=df1, aes(x, Power)) +
-  scale_color_manual(values = custom.col) +
-  scale_color_discrete(
+  scale_shape_discrete(
     labels = c(bttr, Methods[-1]))
-ggsave("paper/fig4.pdf")
+ggsave(
+  paste0(getwd(), "/Computational Statistics/Fig4.pdf"))
 out
 ```
 
@@ -495,14 +499,14 @@ df <- data.frame(
 )
 df1 <- df[df$Method=="Better chi2", ]
 ggplot(data=df, 
-       aes(x, Power , color=Method)) +
+       aes(x, Power , shape=Method)) +
   geom_point() +
   xlab("Slope") +
   geom_line(data=df1, aes(x, Power)) +
-  scale_color_manual(values = custom.col) +
-  scale_color_discrete(
+  scale_shape_discrete(
     labels = c(bttr, Methods[-1]))
-ggsave("paper/fig5.pdf")
+ggsave(
+  paste0(getwd(), "/Computational Statistics/Fig5.pdf"))
 out
 ```
 
@@ -604,14 +608,14 @@ df <- data.frame(
 )
 df1 <- df[df$Method=="Better chi2", ]
 ggplot(data=df, 
-       aes(x, Power , color=Method)) +
-  geom_line() +
+       aes(x, Power , shape=Method)) +
+  geom_point() +
   xlab(expression(sigma)) +
-  geom_point(data=df1, aes(x, Power)) +
-  scale_color_manual(values = custom.col) +
-  scale_color_discrete(
+  geom_line(data=df1, aes(x, Power)) +
+  scale_shape_discrete(
     labels = c(bttr, Methods[-1]))
-ggsave("paper/fig6.pdf")
+ggsave(
+  paste0(getwd(), "/Computational Statistics/Fig6.pdf"))
 out
 ```
 
